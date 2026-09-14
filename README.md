@@ -1,4 +1,4 @@
-# 智慧喝水儀表板 V4（Render 自動部署版）
+# 智慧喝水儀表板 V5（Render PostgreSQL Admin Viewer 版）
 
 GitHub 目標：<https://github.com/iot-superman/DjangoWaterCuppadDashBoard.git>
 
@@ -170,6 +170,37 @@ Invoke-RestMethod `
   "amount_ml": 250
 }
 ```
+
+## V5：啟用 PostgreSQL 資料管理後台
+
+V5 的儀表板右上角新增「資料管理」按鈕，登入後可查看、搜尋、篩選、新增、
+修改及刪除 PostgreSQL 的喝水紀錄。
+
+1. 進入 Render 的 `django-water-cuppad-dashboard` Web Service。
+2. 左側選擇 **Environment**。
+3. 按 **Add Environment Variable**。
+4. Key 輸入：
+
+```text
+DJANGO_SUPERUSER_PASSWORD
+```
+
+5. Value 輸入自己設定的管理員密碼，至少 12 個字元，不要使用 GitHub 密碼。
+6. 按 **Save, rebuild, and deploy**（若只看到 Save，儲存後再按 Manual Deploy）。
+7. 部署完成後開啟：
+
+```text
+https://django-water-cuppad-dashboard.onrender.com/admin/
+```
+
+登入資料：
+
+```text
+帳號：admin
+密碼：你在 Render 設定的 DJANGO_SUPERUSER_PASSWORD
+```
+
+管理員建立程式只讀取 Render 環境變數，密碼不會提交到 GitHub。
 
 ## 官方參考資料
 

@@ -7,7 +7,8 @@ services:
     region: singapore
     # 使用 bash 呼叫，避免從 Windows 上傳時遺失 Linux 可執行權限。
     buildCommand: "bash build.sh"
-    startCommand: "python -m gunicorn water_dashboard_sqlite.wsgi:application"
+    # 每次啟動先依環境變數建立／更新管理員，再啟動正式 Web Server。
+    startCommand: "python manage.py ensure_admin && python -m gunicorn water_dashboard_sqlite.wsgi:application"
     healthCheckPath: /health/
     autoDeployTrigger: commit
     envVars:
@@ -21,6 +22,10 @@ services:
         generateValue: true
       - key: DEBUG
         value: "False"
+      - key: DJANGO_SUPERUSER_USERNAME
+        value: "admin"
+      - key: DJANGO_SUPERUSER_EMAIL
+        value: "admin@example.com"
 
 databases:
   - name: django-water-cuppad-db

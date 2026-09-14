@@ -1,6 +1,9 @@
 import json
+from unittest.mock import patch
 from types import SimpleNamespace
 
+from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import TestCase
 from django.test import override_settings
 from django.urls import reverse
@@ -81,6 +84,21 @@ class DashboardTests(TestCase):
         )
         self.assertEqual(response.status_code, 401)
         self.assertEqual(DrinkRecord.objects.count(), 0)
+
+    def test_ensure_admin_creates_superuser_from_environment(self):
+        """V5：Render 啟動時可由環境變數安全建立管理員。"""
+        variables = {
+            "DJANGO_SUPERUSER_USERNAME": "admin",
+            "DJANGO_SUPERUSER_EMAIL": "admin@example.com",
+            "DJANGO_SUPERUSER_PASSWORD": "safe-test-password-123",
+        }
+        with patch.dict("os.environ", variables, clear=False):
+            call_command("ensure_admin")
+
+        user = get_user_model().objects.get(username="admin")
+        self.assertTrue(user.is_superuser)
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.check_password("safe-test-password-123"))
 
     def test_mqtt_subscriber_writes_directly_to_sqlite(self):
         """模擬 Paho 訊息，確認不經 HTTP API 也能透過 ORM 寫入。"""

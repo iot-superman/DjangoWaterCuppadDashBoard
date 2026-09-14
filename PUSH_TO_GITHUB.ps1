@@ -28,7 +28,10 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$HasCommit = git rev-parse --verify HEAD 2>$null
+# Run the HEAD probe through cmd.exe so an empty new repository does not
+# become a PowerShell NativeCommandError before the first commit exists.
+cmd.exe /d /c "git rev-parse --verify HEAD >nul 2>nul"
+$HasCommit = ($LASTEXITCODE -eq 0)
 $Changes = git status --porcelain
 
 if (-not $HasCommit) {
