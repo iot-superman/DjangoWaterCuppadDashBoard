@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# 虛擬環境與本機設定
+.venv/
+venv/
+.env
+
+# Django 本機產生檔案；Render 使用 PostgreSQL，不上傳 SQLite 資料。
+db.sqlite3
+staticfiles/
+
+# 編輯器與作業系統
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

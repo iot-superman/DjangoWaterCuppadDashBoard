@@ -1,0 +1,31 @@
+# Render Blueprint：建立一個 Django 儀表板與一個 PostgreSQL。
+services:
+  - type: web
+    name: django-water-cuppad-dashboard
+    runtime: python
+    plan: free
+    region: singapore
+    # 使用 bash 呼叫，避免從 Windows 上傳時遺失 Linux 可執行權限。
+    buildCommand: "bash build.sh"
+    startCommand: "python -m gunicorn water_dashboard_sqlite.wsgi:application"
+    healthCheckPath: /health/
+    autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: django-water-cuppad-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: MQTT_API_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+
+databases:
+  - name: django-water-cuppad-db
+    databaseName: water_dashboard
+    user: water_dashboard_user
+    plan: free
+    region: singapore
+    ipAllowList: []
