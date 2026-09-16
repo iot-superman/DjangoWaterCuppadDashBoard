@@ -10,7 +10,8 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "local-demo-only-change-before-product
 DEBUG = os.environ.get("DEBUG", "False" if os.environ.get("RENDER") else "True").lower() == "true"
 
 # Render 會自動提供 RENDER_EXTERNAL_HOSTNAME，例如 xxx.onrender.com。
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", "0.0.0.0"]
+# ALLOWED_HOSTS = ["127.0.0.1", "localhost", "0.0.0.0"]
+ALLOWED_HOSTS = ['*']
 render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
 if render_hostname:
     ALLOWED_HOSTS.append(render_hostname)

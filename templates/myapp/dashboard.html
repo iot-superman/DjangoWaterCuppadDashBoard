@@ -15,6 +15,106 @@
     .progress-bar { background:linear-gradient(90deg,#0d6efd,#20c997); }
     .water-icon { width:62px; height:62px; display:grid; place-items:center; border-radius:18px; background:#dff5ff; font-size:30px; }
     .table > :not(caption) > * > * { padding:.9rem .7rem; }
+
+    /* =========================================================
+       UI V5：每小時喝水互動圖表
+       ========================================================= */
+    .hourly-chart-card { overflow: hidden; }
+    .hourly-chart-toolbar {
+      display:flex;
+      flex-wrap:wrap;
+      gap:.75rem;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .hourly-chart-wrap {
+      position:relative;
+      height:380px; /* 比舊版明顯加高 */
+      min-height:340px;
+      transition:height .25s ease;
+    }
+    .hourly-summary {
+      display:flex;
+      gap:.6rem;
+      flex-wrap:wrap;
+      align-items:center;
+      min-height:38px;
+    }
+    .hourly-summary .pill {
+      border:1px solid #d7e6f2;
+      background:#f8fbfe;
+      border-radius:999px;
+      padding:.42rem .78rem;
+      font-size:.9rem;
+      color:#17324d;
+      transition:transform .15s ease, box-shadow .15s ease, background-color .15s ease;
+    }
+    .hourly-summary button.pill:hover {
+      transform:translateY(-1px);
+      background:#eaf7ff;
+      box-shadow:0 4px 12px rgba(13,110,253,.12);
+    }
+    .drink-legend {
+      display:flex;
+      flex-wrap:wrap;
+      gap:.5rem 1rem;
+      color:#60758a;
+      font-size:.82rem;
+    }
+    .legend-dot {
+      width:10px;
+      height:10px;
+      border-radius:3px;
+      display:inline-block;
+      margin-right:.35rem;
+    }
+    .legend-small  { background:rgba(96,165,250,.55); }
+    .legend-medium { background:rgba(45,212,191,.72); }
+    .legend-large  { background:rgba(14,165,233,.88); }
+
+    .drink-row {
+      transition:background-color .15s ease, box-shadow .15s ease, transform .15s ease;
+      cursor:pointer;
+    }
+    .drink-row:hover,
+    .drink-row.is-highlighted {
+      background:#eaf7ff !important;
+      box-shadow:inset 4px 0 0 #0d6efd;
+    }
+    .drink-row.is-highlighted { transform:translateX(2px); }
+
+    .amount-chip {
+      display:inline-flex;
+      align-items:center;
+      gap:.35rem;
+      padding:.3rem .62rem;
+      border-radius:999px;
+      font-weight:800;
+    }
+    .amount-small  { background:#e8f2ff; color:#2563eb; }
+    .amount-medium { background:#dcfaf4; color:#0f766e; }
+    .amount-large  { background:#dff4ff; color:#0369a1; }
+
+    .hour-focus-banner {
+      display:none;
+      padding:.72rem .95rem;
+      border-radius:14px;
+      background:#eef8ff;
+      border:1px solid #cce9fb;
+    }
+    .hour-focus-banner.show {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:1rem;
+    }
+
+    @media (max-width: 768px) {
+      .hourly-chart-wrap { height:440px; }
+      .hourly-chart-toolbar { align-items:flex-start; }
+      .table > :not(caption) > * > * { padding:.75rem .55rem; }
+    }
+
   </style>
 </head>
 <body>
@@ -53,9 +153,43 @@
     <div class="col-lg-5"><div class="card h-100 p-4"><h2 class="h5 fw-bold mb-3">新增喝水紀錄</h2><form method="post">{% csrf_token %}<div class="mb-3"><label class="form-label">喝水量（ml）</label>{{ form.amount_ml }}{% for e in form.amount_ml.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div><div class="mb-3"><label class="form-label">喝水時間籤</label>{{ form.recorded_at }}<div class="form-text">可指定實際喝水日期與時間。</div></div><div class="mb-3"><label class="form-label">備註</label>{{ form.note }}</div><button class="btn btn-primary w-100">＋ 儲存喝水紀錄</button></form><hr><form method="post" action="{% url 'update_goal' %}" class="row g-2 align-items-end">{% csrf_token %}<div class="col"><label class="form-label">修改每日目標</label><input class="form-control" type="number" name="daily_goal_ml" min="500" max="10000" value="{{ goal.daily_goal_ml }}"></div><div class="col-auto"><button class="btn btn-outline-primary">更新</button></div></form></div></div>
   </div>
 
-  <div class="card p-4 mb-4"><h2 class="h5 fw-bold mb-3">今日每小時喝水量（Bootstrap 卡片＋Chart.js 長條圖）</h2><canvas id="hourlyChart" height="90"></canvas></div>
+  <div class="card p-4 mb-4 hourly-chart-card">
+    <div class="hourly-chart-toolbar mb-2">
+      <div>
+        <h2 class="h5 fw-bold mb-1">今日每小時喝水量</h2>
+        <div class="text-secondary small">
+          每個色塊代表一次喝水；點選小時可放大，滑過圖表或下方紀錄可雙向 Highlight。
+        </div>
+      </div>
+      <button id="resetHourZoom" type="button" class="btn btn-sm btn-outline-primary d-none">
+        顯示全部 24 小時
+      </button>
+    </div>
 
-  <div class="card p-4"><h2 class="h5 fw-bold mb-3">最近喝水紀錄</h2><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>喝水時間籤</th><th>資料入庫時間籤</th><th>喝水量</th><th>來源</th><th>裝置 UID</th><th>備註</th><th></th></tr></thead><tbody>{% for item in recent_records %}<tr><td class="text-nowrap">{{ item.recorded_at|date:"Y/m/d H:i:s" }}</td><td class="text-nowrap text-secondary">{{ item.created_at|date:"Y/m/d H:i:s" }}</td><td class="fw-bold text-primary text-nowrap">{{ item.amount_ml }} ml</td><td><span class="badge {% if item.source == 'mqtt' %}text-bg-info{% else %}text-bg-secondary{% endif %}">{{ item.get_source_display }}</span></td><td>{{ item.device_uid|default:"－" }}</td><td>{{ item.note|default:"－" }}</td><td class="text-end"><form method="post" action="{% url 'delete_record' item.pk %}" onsubmit="return confirm('確定刪除此筆紀錄？')">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">刪除</button></form></td></tr>{% empty %}<tr><td colspan="7" class="text-center text-secondary py-5">目前沒有紀錄，請新增第一杯水。</td></tr>{% endfor %}</tbody></table></div></div>
+    <div class="drink-legend mb-3">
+      <span><i class="legend-dot legend-small"></i>少量 &lt; 100 ml</span>
+      <span><i class="legend-dot legend-medium"></i>一般 100～199 ml</span>
+      <span><i class="legend-dot legend-large"></i>較多 ≥ 200 ml</span>
+    </div>
+
+    <div id="hourFocusBanner" class="hour-focus-banner mb-3">
+      <div>
+        <strong id="focusHourText">09:00</strong>
+        <span id="focusHourStats"></span>
+      </div>
+      <span class="small text-secondary">再次點其他小時即可切換</span>
+    </div>
+
+    <div class="hourly-chart-wrap">
+      <canvas id="hourlyChart"></canvas>
+    </div>
+
+    <div id="hourlySummary" class="hourly-summary mt-3">
+      <span class="pill">提示：點選長條可放大該時段</span>
+    </div>
+  </div>
+
+  <div class="card p-4"><h2 class="h5 fw-bold mb-3">最近喝水紀錄</h2><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>喝水時間籤</th><th>資料入庫時間籤</th><th>喝水量</th><th>來源</th><th>裝置 UID</th><th>備註</th><th></th></tr></thead><tbody>{% for item in recent_records %}<tr class="drink-row" data-record-id="{{ item.pk }}" tabindex="0" title="滑過或點擊可在上方圖表定位此筆紀錄"><td class="text-nowrap">{{ item.recorded_at|date:"Y/m/d H:i:s" }}</td><td class="text-nowrap text-secondary">{{ item.created_at|date:"Y/m/d H:i:s" }}</td><td class="text-nowrap"><span class="amount-chip {% if item.amount_ml < 100 %}amount-small{% elif item.amount_ml < 200 %}amount-medium{% else %}amount-large{% endif %}">{{ item.amount_ml }} ml</span></td><td><span class="badge {% if item.source == 'mqtt' %}text-bg-info{% else %}text-bg-secondary{% endif %}">{{ item.get_source_display }}</span></td><td>{{ item.device_uid|default:"－" }}</td><td>{{ item.note|default:"－" }}</td><td class="text-end"><form method="post" action="{% url 'delete_record' item.pk %}" onsubmit="return confirm('確定刪除此筆紀錄？')">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">刪除</button></form></td></tr>{% empty %}<tr><td colspan="7" class="text-center text-secondary py-5">目前沒有紀錄，請新增第一杯水。</td></tr>{% endfor %}</tbody></table></div></div>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
@@ -64,8 +198,400 @@
   // 後端先產生固定七日資料，前端只負責繪製折線圖。
   new Chart(document.getElementById('waterChart'), {type:'line',data:{labels:{{ chart_labels|safe }},datasets:[{label:'喝水量（ml）',data:{{ chart_values|safe }},fill:true,tension:.35,borderColor:'#0d6efd',backgroundColor:'rgba(13,110,253,.12)',pointBackgroundColor:'#0d6efd'}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,suggestedMax:2000}}}});
 
-  // 今日 24 小時喝水量，使用 Bootstrap 卡片承載 Chart.js 長條圖。
-  new Chart(document.getElementById('hourlyChart'), {type:'bar',data:{labels:{{ hourly_labels|safe }},datasets:[{label:'喝水量（ml）',data:{{ hourly_values|safe }},borderRadius:7,backgroundColor:'rgba(32,201,151,.75)',borderColor:'#159b76',borderWidth:1}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true},x:{grid:{display:false}}}}});
+  // ============================================================
+  // UI V5：今日每小時喝水量互動圖
+  // ============================================================
+  const hourlyLabels = {{ hourly_labels|safe }};
+  const hourlyRecords = {{ hourly_records|safe }};
+
+  let highlightedRecordId = null;
+  let lockedRecordId = null;
+
+  // ============================================================
+  // UI V5.1：連續水柱 + 藍色漸層
+  //
+  // 設計重點：
+  // 1. 每筆 DrinkRecord 仍維持獨立 dataset，保留原本 Highlight 功能。
+  // 2. 平常完全移除每一層的框線，避免水柱看起來被切成數段。
+  // 3. 同一小時依堆疊位置由淺藍逐漸變成深藍，產生連續漸層感。
+  // 4. 只有整根水柱最上方的那筆資料有頂端圓角；中間完全沒有圓角。
+  // ============================================================
+
+  // 將兩個 RGB 顏色依比例混合。
+  function mixRgb(from, to, ratio) {
+    const r = Math.round(from[0] + (to[0] - from[0]) * ratio);
+    const g = Math.round(from[1] + (to[1] - from[1]) * ratio);
+    const b = Math.round(from[2] + (to[2] - from[2]) * ratio);
+    return `rgba(${r},${g},${b},.94)`;
+  }
+
+  // 取得某筆紀錄在「同一小時」中的堆疊順位與總筆數。
+  // 這讓顏色不是依喝水量跳色，而是沿著整根水柱自然由淺到深。
+  function getStackPosition(recordIndex, hour) {
+    const sameHourIndexes = [];
+    hourlyRecords.forEach((item, index) => {
+      if (Number(item.hour) === Number(hour)) sameHourIndexes.push(index);
+    });
+
+    return {
+      position: sameHourIndexes.indexOf(recordIndex),
+      total: sameHourIndexes.length,
+      isTop: sameHourIndexes[sameHourIndexes.length - 1] === recordIndex
+    };
+  }
+
+  // 每筆 DrinkRecord 建立一個 dataset。
+  // 所有 dataset 共用同一個 stack，因此同一小時會無縫堆疊成一整根水柱。
+  const hourlyDatasets = hourlyRecords.map((record, recordIndex) => {
+    const values = new Array(24).fill(null);
+    values[record.hour] = record.amount_ml;
+
+    const stack = getStackPosition(recordIndex, record.hour);
+
+    // 底部使用較亮的天空藍，越往頂部越接近較深的藍色。
+    // total === 1 時使用中間偏亮的藍色，避免單筆資料太淡。
+    const ratio = stack.total <= 1
+      ? 0.48
+      : stack.position / Math.max(1, stack.total - 1);
+    const waterColor = mixRgb([91, 192, 235], [13, 110, 253], ratio);
+
+    return {
+      label: `${record.time}・${record.amount_ml} ml`,
+      data: values,
+      stack: 'drink-events',
+      recordId: Number(record.id),
+      recordInfo: record,
+
+      // 【V5.1 修改】同色系漸層；不再用不同色系切割每筆紀錄。
+      backgroundColor: waterColor,
+
+      // 【V5.1 修改】平常完全沒有邊框，視覺上是一根連續水柱。
+      borderColor: 'transparent',
+      borderWidth: 0,
+      borderSkipped: false,
+
+      // 【V5.2 修改】整根水柱頂端只保留 2px 微圓角。
+      // 讓 BAR 幾乎呈現直角，同時避免邊緣過於生硬；中間各層仍維持 0，保持連續感。
+      borderRadius: stack.isTop
+        ? { topLeft: 2, topRight: 2, bottomLeft: 0, bottomRight: 0 }
+        : 0,
+
+      // 讓水柱維持原本較醒目的寬度。
+      maxBarThickness: 62
+    };
+  });
+
+  // 在目前 Highlight 的那一筆色塊外畫粗框。
+  const recordHighlightPlugin = {
+    id: 'recordHighlight',
+    afterDatasetsDraw(chart) {
+      if (highlightedRecordId === null) return;
+
+      const datasetIndex = chart.data.datasets.findIndex(
+        ds => Number(ds.recordId) === Number(highlightedRecordId)
+      );
+      if (datasetIndex < 0) return;
+
+      const dataset = chart.data.datasets[datasetIndex];
+      const record = dataset.recordInfo;
+      const meta = chart.getDatasetMeta(datasetIndex);
+      const bar = meta.data[record.hour];
+
+      if (!bar || bar.skip) return;
+
+      const props = bar.getProps(['x', 'y', 'base', 'width'], true);
+      const top = Math.min(props.y, props.base);
+      const height = Math.abs(props.base - props.y);
+
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.strokeStyle = '#0d6efd';
+      ctx.lineWidth = 4;
+      ctx.shadowColor = 'rgba(13,110,253,.35)';
+      ctx.shadowBlur = 12;
+      ctx.strokeRect(
+        props.x - props.width / 2 - 3,
+        top - 3,
+        props.width + 6,
+        height + 6
+      );
+      ctx.restore();
+    }
+  };
+
+  const hourlyChart = new Chart(document.getElementById('hourlyChart'), {
+    type: 'bar',
+    data: {
+      labels: hourlyLabels,
+      datasets: hourlyDatasets
+    },
+    plugins: [recordHighlightPlugin],
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 260 },
+      interaction: {
+        mode: 'nearest',
+        intersect: true
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title(items) {
+              if (!items.length) return '';
+              const dataset = items[0].dataset;
+              return `${hourlyLabels[items[0].dataIndex]}・${dataset.recordInfo.time}`;
+            },
+            label(context) {
+              const record = context.dataset.recordInfo;
+              return ` ${record.amount_ml} ml・${record.source}`;
+            },
+            afterLabel(context) {
+              const record = context.dataset.recordInfo;
+              return [
+                `裝置 UID：${record.device_uid}`,
+                `備註：${record.note}`
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          stacked: true,
+          grid: { display: false },
+          ticks: {
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 12
+          }
+        },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          grace: '15%',
+          title: {
+            display: true,
+            text: '喝水量（ml）'
+          }
+        }
+      },
+
+      // 點某個小時後，聚焦前後 2 小時，讓該時段長條明顯變寬。
+      onClick(event, elements, chart) {
+        const points = chart.getElementsAtEventForMode(
+          event,
+          'index',
+          { intersect: false },
+          false
+        );
+        if (!points.length) return;
+        focusHour(points[0].index);
+      },
+
+      // 滑過圖表色塊，同步 Highlight 下方紀錄。
+      onHover(event, elements) {
+        const nativeEvent = event.native;
+        if (!nativeEvent) return;
+
+        if (elements.length) {
+          const dataset = hourlyChart.data.datasets[elements[0].datasetIndex];
+          if (dataset?.recordId) {
+            setRecordHighlight(dataset.recordId, false);
+            nativeEvent.target.style.cursor = 'pointer';
+            return;
+          }
+        }
+
+        nativeEvent.target.style.cursor = 'default';
+        if (lockedRecordId === null) {
+          clearRecordHighlight(false);
+        }
+      }
+    }
+  });
+
+  function updateHourSummary(hourIndex) {
+    const records = hourlyRecords.filter(
+      record => Number(record.hour) === Number(hourIndex)
+    );
+    const total = records.reduce(
+      (sum, record) => sum + Number(record.amount_ml),
+      0
+    );
+
+    document.getElementById('focusHourText').textContent = hourlyLabels[hourIndex];
+    document.getElementById('focusHourStats').textContent =
+      records.length
+        ? `　共 ${records.length} 次・${total} ml`
+        : '　此小時尚無喝水紀錄';
+
+    document.getElementById('hourFocusBanner').classList.add('show');
+
+    const summary = document.getElementById('hourlySummary');
+
+    if (!records.length) {
+      summary.innerHTML = '<span class="pill">這個小時目前沒有喝水紀錄</span>';
+      return;
+    }
+
+    summary.innerHTML = records.map(record =>
+      `<button type="button"
+               class="pill record-summary-btn"
+               data-record-id="${record.id}">
+         ${record.time}・<strong>${record.amount_ml} ml</strong>
+       </button>`
+    ).join('');
+
+    summary.querySelectorAll('.record-summary-btn').forEach(button => {
+      button.addEventListener('mouseenter', () => {
+        setRecordHighlight(button.dataset.recordId, false);
+      });
+      button.addEventListener('mouseleave', () => {
+        if (lockedRecordId === null) clearRecordHighlight(false);
+      });
+      button.addEventListener('click', () => {
+        toggleRecordLock(button.dataset.recordId);
+      });
+    });
+  }
+
+  function focusHour(hourIndex) {
+    const min = Math.max(0, hourIndex - 2);
+    const max = Math.min(23, hourIndex + 2);
+
+    hourlyChart.options.scales.x.min = hourlyLabels[min];
+    hourlyChart.options.scales.x.max = hourlyLabels[max];
+    hourlyChart.options.scales.x.ticks.maxTicksLimit = 5;
+    hourlyChart.update();
+
+    updateHourSummary(hourIndex);
+    document.getElementById('resetHourZoom').classList.remove('d-none');
+  }
+
+  function resetHourZoom() {
+    delete hourlyChart.options.scales.x.min;
+    delete hourlyChart.options.scales.x.max;
+    hourlyChart.options.scales.x.ticks.maxTicksLimit = 12;
+    hourlyChart.update();
+
+    document.getElementById('resetHourZoom').classList.add('d-none');
+    document.getElementById('hourFocusBanner').classList.remove('show');
+    document.getElementById('hourlySummary').innerHTML =
+      '<span class="pill">提示：點選長條可放大該時段</span>';
+  }
+
+  document.getElementById('resetHourZoom').addEventListener(
+    'click',
+    resetHourZoom
+  );
+
+  function findDatasetIndexByRecordId(recordId) {
+    return hourlyChart.data.datasets.findIndex(
+      dataset => Number(dataset.recordId) === Number(recordId)
+    );
+  }
+
+  function setRecordHighlight(recordId, lock = false) {
+    const numericId = Number(recordId);
+    const datasetIndex = findDatasetIndexByRecordId(numericId);
+
+    // 最近 20 筆可能包含昨天資料；昨天的資料不在「今日圖表」內。
+    if (datasetIndex < 0) return;
+
+    highlightedRecordId = numericId;
+    if (lock) lockedRecordId = numericId;
+
+    document.querySelectorAll('.drink-row').forEach(row => {
+      row.classList.toggle(
+        'is-highlighted',
+        Number(row.dataset.recordId) === numericId
+      );
+    });
+
+    const dataset = hourlyChart.data.datasets[datasetIndex];
+    const hour = Number(dataset.recordInfo.hour);
+
+    hourlyChart.setActiveElements([
+      { datasetIndex: datasetIndex, index: hour }
+    ]);
+
+    hourlyChart.tooltip.setActiveElements(
+      [{ datasetIndex: datasetIndex, index: hour }],
+      { x: 0, y: 0 }
+    );
+
+    hourlyChart.update('none');
+  }
+
+  function clearRecordHighlight(clearLock = false) {
+    if (clearLock) lockedRecordId = null;
+    highlightedRecordId = lockedRecordId;
+
+    document.querySelectorAll('.drink-row').forEach(row => {
+      row.classList.toggle(
+        'is-highlighted',
+        lockedRecordId !== null &&
+        Number(row.dataset.recordId) === Number(lockedRecordId)
+      );
+    });
+
+    if (lockedRecordId !== null) {
+      setRecordHighlight(lockedRecordId, false);
+      return;
+    }
+
+    hourlyChart.setActiveElements([]);
+    hourlyChart.tooltip.setActiveElements([], { x: 0, y: 0 });
+    hourlyChart.update('none');
+  }
+
+  function toggleRecordLock(recordId) {
+    const numericId = Number(recordId);
+
+    if (lockedRecordId === numericId) {
+      clearRecordHighlight(true);
+    } else {
+      setRecordHighlight(numericId, true);
+    }
+  }
+
+  // 最近喝水紀錄 -> 上方 Chart.js。
+  // 桌機支援 Hover / Focus；手機支援 Click。
+  document.querySelectorAll('.drink-row[data-record-id]').forEach(row => {
+    const recordId = Number(row.dataset.recordId);
+
+    row.addEventListener('mouseenter', () => {
+      if (lockedRecordId === null) {
+        setRecordHighlight(recordId, false);
+      }
+    });
+
+    row.addEventListener('mouseleave', () => {
+      if (lockedRecordId === null) {
+        clearRecordHighlight(false);
+      }
+    });
+
+    row.addEventListener('focus', () => {
+      if (lockedRecordId === null) {
+        setRecordHighlight(recordId, false);
+      }
+    });
+
+    row.addEventListener('blur', () => {
+      if (lockedRecordId === null) {
+        clearRecordHighlight(false);
+      }
+    });
+
+    row.addEventListener('click', (event) => {
+      // 點刪除按鈕時不要鎖定 Highlight。
+      if (event.target.closest('button, form')) return;
+      toggleRecordLock(recordId);
+    });
+  });
 
   // 沒有正在輸入表單時，每 15 秒自動刷新 MQTT 最新資料。
   setInterval(() => {

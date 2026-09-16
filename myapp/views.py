@@ -56,10 +56,30 @@ def dashboard(request):
     chart_values = [totals.get(day, 0) for day in days]
 
     # 今日每小時喝水量：固定建立 0～23 時，沒有資料的時段填入 0。
+    # UI V5：
+    # hourly_values 保留原本每小時加總；
+    # hourly_records 則保留今日「每一筆」喝水事件，讓 Chart.js 可以：
+    # 1. 同一小時分層堆疊每次喝水。
+    # 2. 與下方最近喝水紀錄雙向 Highlight。
     hourly_values = [0] * 24
-    for record in today_records.only("amount_ml", "recorded_at"):
+    hourly_records = []
+
+    for record in today_records.only(
+        "id", "amount_ml", "recorded_at", "source", "device_uid", "note"
+    ).order_by("recorded_at", "id"):
         local_recorded_at = timezone.localtime(record.recorded_at)
-        hourly_values[local_recorded_at.hour] += record.amount_ml
+        hour = local_recorded_at.hour
+        hourly_values[hour] += record.amount_ml
+
+        hourly_records.append({
+            "id": record.id,
+            "hour": hour,
+            "time": local_recorded_at.strftime("%H:%M:%S"),
+            "amount_ml": record.amount_ml,
+            "source": record.get_source_display(),
+            "device_uid": record.device_uid or "－",
+            "note": record.note or "－",
+        })
 
     context = {
         "form": form,
@@ -73,6 +93,8 @@ def dashboard(request):
         "chart_values": json.dumps(chart_values),
         "hourly_labels": json.dumps([f"{hour:02d}:00" for hour in range(24)]),
         "hourly_values": json.dumps(hourly_values),
+        # UI V5：今日逐筆喝水事件，供 Chart.js 分層與紀錄表互動。
+        "hourly_records": json.dumps(hourly_records, ensure_ascii=False),
     }
     return render(request, "myapp/dashboard.html", context)
 
