@@ -1,21 +1,16 @@
-# Render Blueprint：建立一個 Django 儀表板與一個 PostgreSQL。
+# V5：Render 免費 Django + SQLite 示範部署（不建立 PostgreSQL）。
+# 警告：Render Free 休眠／重啟／重新部署時，SQLite 的新增資料會遺失。
 services:
   - type: web
     name: django-water-cuppad-dashboard
     runtime: python
     plan: free
     region: singapore
-    # 使用 bash 呼叫，避免從 Windows 上傳時遺失 Linux 可執行權限。
     buildCommand: "bash build.sh"
-    # 每次啟動先依環境變數建立／更新管理員，再啟動正式 Web Server。
-    startCommand: "python manage.py ensure_admin && python -m gunicorn water_dashboard_sqlite.wsgi:application"
+    startCommand: "python manage.py migrate --noinput && python manage.py ensure_admin && python -m gunicorn water_dashboard_sqlite.wsgi:application"
     healthCheckPath: /health/
     autoDeployTrigger: commit
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: django-water-cuppad-db
-          property: connectionString
       - key: SECRET_KEY
         generateValue: true
       - key: MQTT_API_KEY
@@ -26,11 +21,3 @@ services:
         value: "admin"
       - key: DJANGO_SUPERUSER_EMAIL
         value: "admin@example.com"
-
-databases:
-  - name: django-water-cuppad-db
-    databaseName: water_dashboard
-    user: water_dashboard_user
-    plan: free
-    region: singapore
-    ipAllowList: []
