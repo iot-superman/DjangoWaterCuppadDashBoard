@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
+from django.db import connection
 from django.db.models import Sum
 from django.db.models.functions import TruncDate
 from django.http import JsonResponse
@@ -81,7 +82,16 @@ def dashboard(request):
             "note": record.note or "－",
         })
 
+    # UI V6：依 Django 實際啟用的資料庫連線後端顯示名稱，避免寫死 PostgreSQL。
+    database_name = {
+        "sqlite": "SQLite",
+        "postgresql": "PostgreSQL",
+        "mysql": "MySQL",
+        "oracle": "Oracle",
+    }.get(connection.vendor, connection.vendor)
+
     context = {
+        "database_name": database_name,
         "form": form,
         "today_total": today_total,
         "goal": goal,
