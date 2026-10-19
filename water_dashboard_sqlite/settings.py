@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 
-import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -58,24 +57,14 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "water_dashboard_sqlite.wsgi.application"
 
-# V4：Render 有 DATABASE_URL 時使用 PostgreSQL；本機仍可使用 SQLite。
-database_url = os.environ.get("DATABASE_URL")
-if database_url:
-    DATABASES = {
-        "default": dj_database_url.config(
-            default=database_url,
-            conn_max_age=600,
-            conn_health_checks=True,
-            ssl_require=True,
-        )
+# V5：固定使用 SQLite，不再讀取 Render 的 DATABASE_URL。
+# 注意：Render Free 的本機檔案在休眠／重啟／重新部署後會遺失。
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
     }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
+}
 
 AUTH_PASSWORD_VALIDATORS = []
 LANGUAGE_CODE = "zh-hant"
