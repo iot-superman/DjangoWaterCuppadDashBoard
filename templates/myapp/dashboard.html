@@ -156,9 +156,9 @@
   <div class="card p-4 mb-4 hourly-chart-card">
     <div class="hourly-chart-toolbar mb-2">
       <div>
-        <h2 class="h5 fw-bold mb-1">今日每小時喝水量</h2>
+        <h2 class="h5 fw-bold mb-1">當日每小時喝水量（{{ selected_day_label }}）</h2>
         <div class="text-secondary small">
-          每個色塊代表一次喝水；點選小時可放大，滑過圖表或下方紀錄可雙向 Highlight。
+          點選上方折線圖日期可切換當日資料；每個色塊代表一次喝水，點選小時可放大，滑過圖表或下方紀錄可雙向 Highlight。
         </div>
       </div>
       <button id="resetHourZoom" type="button" class="btn btn-sm btn-outline-primary d-none">
@@ -196,7 +196,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
 <script>
   // 後端先產生固定七日資料，前端只負責繪製折線圖。
-  new Chart(document.getElementById('waterChart'), {type:'line',data:{labels:{{ chart_labels|safe }},datasets:[{label:'喝水量（ml）',data:{{ chart_values|safe }},fill:true,tension:.35,borderColor:'#0d6efd',backgroundColor:'rgba(13,110,253,.12)',pointBackgroundColor:'#0d6efd'}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,suggestedMax:2000}}}});
+  // V6：日期與七日資料順序一致，點選折線圖後帶 day 參數重新載入。
+  const chartDates = {{ chart_dates|safe }};
+  const selectedDay = '{{ selected_day|escapejs }}';
+  new Chart(document.getElementById('waterChart'), {type:'line',data:{labels:{{ chart_labels|safe }},datasets:[{label:'喝水量（ml）',data:{{ chart_values|safe }},fill:true,tension:.35,borderColor:'#0d6efd',backgroundColor:'rgba(13,110,253,.12)',pointBackgroundColor:chartDates.map(day=>day===selectedDay?'#f97316':'#0d6efd'),pointRadius:chartDates.map(day=>day===selectedDay?7:5)}]},options:{responsive:true,onClick(event,elements,chart){const points=chart.getElementsAtEventForMode(event,'nearest',{intersect:true},false);if(!points.length)return;const day=chartDates[points[0].index];if(!day)return;const url=new URL(window.location.href);url.searchParams.set('day',day);window.location.assign(url.toString());},onHover(event,elements){if(event.native?.target)event.native.target.style.cursor=elements.length?'pointer':'default';},plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,suggestedMax:2000}}}});
 
   // ============================================================
   // UI V5：今日每小時喝水量互動圖
@@ -497,7 +500,7 @@
     const numericId = Number(recordId);
     const datasetIndex = findDatasetIndexByRecordId(numericId);
 
-    // 最近 20 筆可能包含昨天資料；昨天的資料不在「今日圖表」內。
+    // 最近 20 筆可能包含昨天資料；其他日期的資料不在「當日圖表」內。
     if (datasetIndex < 0) return;
 
     highlightedRecordId = numericId;
