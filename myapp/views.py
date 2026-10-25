@@ -9,7 +9,7 @@ from django.db.models.functions import TruncDate
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.utils.dateparse import parse_datetime
+from django.utils.dateparse import parse_date, parse_datetime
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 
@@ -21,6 +21,10 @@ def dashboard(request):
     """顯示今日統計、近七日圖表及最近喝水紀錄。"""
     now = timezone.localtime()
     today = now.date()
+    # V6：從七日折線圖選取日期，限制查詢範圍並避免無效日期。
+    start_date = today - timedelta(days=6)
+    requested_day = parse_date(request.GET.get('day', ''))
+    selected_day = requested_day if requested_day and start_date <= requested_day <= today else today
     goal, _ = WaterGoal.objects.get_or_create(pk=1, defaults={"daily_goal_ml": 2000})
 
     if request.method == "POST":
@@ -40,7 +44,6 @@ def dashboard(request):
     remaining = max(goal.daily_goal_ml - today_total, 0)
 
     # 建立固定七天序列，沒有資料的日期也會顯示 0。
-    start_date = today - timedelta(days=6)
     totals = {
         item["day"]: item["total"]
         for item in (
@@ -64,7 +67,9 @@ def dashboard(request):
     hourly_values = [0] * 24
     hourly_records = []
 
-    for record in today_records.only(
+    # V6：每小時統計改讀取選取日期，不再固定今天。
+    selected_records = DrinkRecord.objects.filter(recorded_at__date=selected_day)
+    for record in selected_records.only(
         "id", "amount_ml", "recorded_at", "source", "device_uid", "note"
     ).order_by("recorded_at", "id"):
         local_recorded_at = timezone.localtime(record.recorded_at)
@@ -83,6 +88,9 @@ def dashboard(request):
 
     context = {
         "form": form,
+        "selected_day": selected_day.isoformat(),
+        "selected_day_label": selected_day.strftime("%Y/%m/%d"),
+        "chart_dates": json.dumps([day.isoformat() for day in days]),
         "today_total": today_total,
         "goal": goal,
         "progress": progress,
